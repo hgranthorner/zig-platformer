@@ -4,9 +4,9 @@ const c = @cImport({
 const std = @import("std");
 const assert = @import("std").debug.assert;
 
-const x = 800;
-const y = 600;
-const FPS = 60;
+const screen_width = 800;
+const screen_height = 600;
+const fps = 60;
 
 pub fn main() !void {
     if (c.SDL_Init(c.SDL_INIT_VIDEO) != 0) {
@@ -15,13 +15,7 @@ pub fn main() !void {
     }
     defer c.SDL_Quit();
 
-    const screen = c.SDL_CreateWindow("My Game Window", 
-        c.SDL_WINDOWPOS_UNDEFINED, 
-        c.SDL_WINDOWPOS_UNDEFINED, 
-        x, 
-        y, 
-        c.SDL_WINDOW_OPENGL
-        ) orelse
+    const screen = c.SDL_CreateWindow("My Game Window", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, c.SDL_WINDOW_OPENGL) orelse
         {
         c.SDL_Log("Unable to create window: %s", c.SDL_GetError());
         return error.SDLInitializationFailed;
@@ -34,28 +28,24 @@ pub fn main() !void {
     };
     defer c.SDL_DestroyRenderer(renderer);
 
-    var rect = c.SDL_Rect{.x = 10, .y = 10, .w = 30, .h = 30 };
+    var rect = c.SDL_Rect{ .x = 10, .y = 10, .w = 30, .h = 30 };
 
     var quit = false;
-    const render_timer = @floatToInt(u32, 1000 / FPS);
+    const render_timer = @floatToInt(i64, 1000 / fps);
+    var state = c.SDL_GetKeyboardState(null);
 
     while (!quit) {
         const start_frame_time = c.SDL_GetTicks();
+
+        _ = c.SDL_PumpEvents();
+
+        try_move_player(&rect, state);
+
         var event: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&event) != 0) {
             switch (event.@"type") {
                 c.SDL_QUIT => {
                     quit = true;
-                },
-                c.SDL_KEYDOWN => {
-                    const e = event.key;
-                    switch (e.keysym.sym) {
-                        c.SDLK_RIGHT => {
-                            var x_ptr = &rect.x;
-                            x_ptr.* = rect.x + 10;
-                        },
-                        else => {},
-                    }
                 },
                 else => {},
             }
@@ -70,7 +60,41 @@ pub fn main() !void {
         c.SDL_RenderPresent(renderer);
 
         const end_frame_time = c.SDL_GetTicks();
-        const ms_elapsed: i64 = @maximum(10, @as(i64, render_timer) - @as(i64, end_frame_time - start_frame_time));
+        const ms_elapsed: i64 = @maximum(10, render_timer - @as(i64, end_frame_time - start_frame_time));
         c.SDL_Delay(@intCast(u32, ms_elapsed));
+    }
+}
+
+fn try_move_player(rect: *c.SDL_Rect, keyboard_state_array: [*]const u8) void {
+    if (keyboard_state_array[c.SDL_SCANCODE_RIGHT] == 1) {
+        rect.x += 10;
+    }
+
+    if (keyboard_state_array[c.SDL_SCANCODE_LEFT] == 1) {
+        rect.x -= 10;
+    }
+
+    if (keyboard_state_array[c.SDL_SCANCODE_DOWN] == 1) {
+        rect.y += 10;
+    }
+
+    if (keyboard_state_array[c.SDL_SCANCODE_UP] == 1) {
+        rect.y -= 10;
+    }
+
+    if (rect.x < 0) {
+        rect.x = 0;
+    }
+
+    if (rect.x + rect.w > screen_width) {
+        rect.x = screen_width - rect.w;
+    }
+
+    if (rect.y < 0) {
+        rect.y = 0;
+    }
+
+    if (rect.y + rect.h > screen_height) {
+        rect.y = screen_height - rect.h;
     }
 }
