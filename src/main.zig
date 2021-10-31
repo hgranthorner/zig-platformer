@@ -1,12 +1,26 @@
 const c = @cImport({
     @cInclude("SDL.h");
 });
-const std = @import("std");
+const print = @import("std").debug.print;
 const assert = @import("std").debug.assert;
 
 const screen_width = 800;
 const screen_height = 600;
 const fps = 60;
+
+const Entity = struct {
+    rect: c.SDL_Rect,
+    y_velocity: i32,
+    x_velocity: i32,
+    color: [4]u8,
+};
+
+const Player = struct {
+    rect: c.SDL_Rect,
+    y_velocity: i32,
+    x_velocity: i32,
+    color: [4]u8,
+};
 
 pub fn main() !void {
     if (c.SDL_Init(c.SDL_INIT_VIDEO) != 0) {
@@ -28,7 +42,8 @@ pub fn main() !void {
     };
     defer c.SDL_DestroyRenderer(renderer);
 
-    var rect = c.SDL_Rect{ .x = 10, .y = 10, .w = 30, .h = 30 };
+    var player = Player{ .rect = c.SDL_Rect{ .x = 10, .y = 10, .w = 30, .h = 30 }, .y_velocity = 0, .x_velocity = 0, .color = .{ 0, 255, 0, 255 } };
+    var player_rect = &player.rect;
 
     var quit = false;
     const render_timer = @floatToInt(i64, 1000 / fps);
@@ -39,7 +54,7 @@ pub fn main() !void {
 
         _ = c.SDL_PumpEvents();
 
-        try_move_player(&rect, state);
+        applyPlayerControls(player_rect, state);
 
         var event: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&event) != 0) {
@@ -47,15 +62,28 @@ pub fn main() !void {
                 c.SDL_QUIT => {
                     quit = true;
                 },
+                c.SDL_KEYDOWN => {
+                    switch(event.key.keysym.scancode) {
+                        c.SDL_SCANCODE_SPACE => {
+                            print("Pressed space.\n", .{});
+                            player.y_velocity = -20;
+                            print("{}.\n", .{player.y_velocity});
+                        },
+                        else => {},
+                    }
+                },
                 else => {},
             }
         }
 
+        applyGravity(&player);
+        applyVelocity(&player);
+
         _ = c.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         _ = c.SDL_RenderClear(renderer);
 
-        _ = c.SDL_SetRenderDrawColor(renderer, 100, 0, 0, 255);
-        _ = c.SDL_RenderFillRect(renderer, &rect);
+        _ = c.SDL_SetRenderDrawColor(renderer, player.color[0], player.color[1], player.color[2], player.color[3]);
+        _ = c.SDL_RenderFillRect(renderer, player_rect);
 
         c.SDL_RenderPresent(renderer);
 
@@ -65,7 +93,24 @@ pub fn main() !void {
     }
 }
 
-fn try_move_player(rect: *c.SDL_Rect, keyboard_state_array: [*]const u8) void {
+fn applyGravity(player: *Player) void {
+    if (player.rect.y + player.rect.h >= screen_height and player.y_velocity >= 0) {
+        player.rect.y = screen_height - player.rect.h;
+        player.y_velocity = 0;
+        return;
+    }
+
+    player.y_velocity += 1;
+}
+
+fn applyVelocity(player: *Player) void {
+    print("applyVelocity: {} - {}\n", .{player.rect.y, player.y_velocity});
+    player.rect.x += player.x_velocity;
+    player.rect.y += player.y_velocity;
+    print("applyVelocity: {} - {}\n", .{player.rect.y, player.y_velocity});
+}
+
+fn applyPlayerControls(rect: *c.SDL_Rect, keyboard_state_array: [*]const u8) void {
     if (keyboard_state_array[c.SDL_SCANCODE_RIGHT] == 1) {
         rect.x += 10;
     }
